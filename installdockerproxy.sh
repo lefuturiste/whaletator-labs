@@ -5,19 +5,42 @@ if [ "$(whoami)" != "root" ]; then
     exit
 fi
 
+if [ "$AGENT_TOKEN" = "" ]; then
+    echo "E: No agent token provided"
+    exit
+fi
+
+echo "Running with token $AGENT_TOKEN"
+
 # verify docker install
 
 if [ "$(which docker)" != "/usr/bin/docker" ]; then
     echo "E: Docker is not installed"
-    exit
+    apt-get update
+    apt-get install -y apt-transport-https ca-certificates curl gnupg-agent software-properties-common
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+    apt-key fingerprint 0EBFCD88
+    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    apt-get update
+    apt-get install docker-ce docker-ce-cli containerd.io
+    docker --version
+    docker run hello-world
 fi
+
+echo ""
+echo "Docker installed."
+echo ""
 
 # verify nginx install
 
-if [ "$(which nginx)" != "/usr/bin/nginx" ]; then
+if [ "$(which nginx)" != "/usr/sbin/nginx" ]; then
     echo "E: Nginx is not installed"
-    exit
+    apt-get install nginx
 fi
+
+echo ""
+echo "Nginx installed."
+echo ""
 
 # edit docker config
 
@@ -68,24 +91,27 @@ curl http://localhost:4243
 
 # edit nginx config
 
-rm /etc/nginx/site-enabled/default
-touch /etc/nginx/site-enabled/default
-echo "server {" >> /etc/nginx/site-enabled/default
-echo "    listen 8042;" >> /etc/nginx/site-enabled/default
-echo "    server_name _;" >> /etc/nginx/site-enabled/default
-echo "    if (\$http_authorization != \"Bearer $AGENT_TOKEN\") { return 403; }" >> /etc/nginx/site-enabled/default
-echo "    location / {" >> /etc/nginx/site-enabled/default
-echo "        proxy_pass http://localhost:4243;" >> /etc/nginx/site-enabled/default
-echo "        proxy_http_version 1.1;" >> /etc/nginx/site-enabled/default
-echo "        proxy_set_header Upgrade $http_upgrade;" >> /etc/nginx/site-enabled/default
-echo "        proxy_set_header Connection 'upgrade';" >> /etc/nginx/site-enabled/default
-echo "        proxy_set_header Host $host;" >> /etc/nginx/site-enabled/default
-echo "        proxy_cache_bypass $http_upgrade;" >> /etc/nginx/site-enabled/default
-echo "    }" >> /etc/nginx/site-enabled/default
-echo "}" >> /etc/nginx/site-enabled/default
+rm /etc/nginx/sites-enabled/default
+touch /etc/nginx/sites-enabled/default
+echo "server {" >> /etc/nginx/sites-enabled/default
+echo "    listen 8042;" >> /etc/nginx/sites-enabled/default
+echo "    server_name _;" >> /etc/nginx/sites-enabled/default
+echo "    if (\$http_authorization != \"Bearer $AGENT_TOKEN\") { return 403; }" >> /etc/nginx/sites-enabled/default
+echo "    location / {" >> /etc/nginx/sites-enabled/default
+echo "        proxy_pass http://localhost:4243;" >> /etc/nginx/sites-enabled/default
+echo "        proxy_http_version 1.1;" >> /etc/nginx/sites-enabled/default
+echo "        proxy_set_header Upgrade $http_upgrade;" >> /etc/nginx/sites-enabled/default
+echo "        proxy_set_header Connection 'upgrade';" >> /etc/nginx/sites-enabled/default
+echo "        proxy_set_header Host $host;" >> /etc/nginx/sites-enabled/default
+echo "        proxy_cache_bypass $http_upgrade;" >> /etc/nginx/sites-enabled/default
+echo "    }" >> /etc/nginx/sites-enabled/default
+echo "}" >> /etc/nginx/sites-enabled/default
 
 nginx -t
 
 service nginx restart
 
 curl http://localhost:8042
+
+echo ""
+echo "Done."
